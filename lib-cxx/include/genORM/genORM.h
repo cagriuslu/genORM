@@ -27,6 +27,7 @@ namespace genORM {
 		explicit database(void*);
 
 	public:
+		static std::expected<database, std::string> open(const char* filepath);
 		static std::expected<database, std::string> open_or_create(const char* filepath);
 		database(const database& other) = delete;
 		database& operator=(const database& other) = delete;

@@ -49,10 +49,26 @@ std::expected<uint64_t, std::string> object::insert_into_table(database& db, con
 
 database::database(void* db_handle) : _db_handle(db_handle) {}
 
+std::expected<database, std::string> database::open(const char* filepath) {
+	sqlite3* db{};
+	if (const auto result = sqlite3_open_v2(filepath, &db, SQLITE_OPEN_READWRITE, nullptr); result == SQLITE_OK) {
+		if (const auto is_read_only = sqlite3_db_readonly(db, "main"); is_read_only == 0) {
+			return database{db};
+		} else {
+			return std::unexpected("Insufficient permissions, database is read-only.");
+		}
+	} else {
+		return std::unexpected(std::string{sqlite3_errstr(result)});
+	}
+}
 std::expected<database, std::string> database::open_or_create(const char* filepath) {
 	sqlite3* db{};
 	if (const auto result = sqlite3_open_v2(filepath, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nullptr); result == SQLITE_OK) {
-		return database{db};
+		if (const auto is_read_only = sqlite3_db_readonly(db, "main"); is_read_only == 0) {
+			return database{db};
+		} else {
+			return std::unexpected("Insufficient permissions, database is read-only.");
+		}
 	} else {
 		return std::unexpected(std::string{sqlite3_errstr(result)});
 	}
