@@ -22,6 +22,7 @@ namespace genORM {
 	};
 
 	class database final {
+		friend object;
 		void* _db_handle;
 
 		explicit database(void*);
@@ -34,16 +35,5 @@ namespace genORM {
 		database(database&& other) noexcept;
 		database& operator=(database&& other) noexcept;
 		~database();
-
-	protected:
-		std::expected<void, std::string> prepare_bind_execute_statement(std::string_view statement, int value_count = 0,
-			const std::function<void(void* sqlite_statement, int value_index)>& binder = binder_none,
-			const std::function<bool()>& op = op_ignore);
-		static void binder_none(void*, int);
-		static bool op_ignore();
-
-		uint64_t last_insert_rowid();
-
-		friend object;
 	};
 }
