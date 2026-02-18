@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 option(BUILD_TESTS "Build tests" OFF)
-option(BUILD_DEPENDENCIES "Build dependencies" OFF)
+option(SQLITE_HEADER_DIR "Directory containing Sqlite headers to compile against. If left empty, Sqlite will be built.")
 
 project(genORM-cxx C CXX)
 
@@ -13,11 +13,11 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 endif()
 
-if(BUILD_DEPENDENCIES)
-    add_subdirectory(ext/sqlite)
-else()
+if(SQLITE_HEADER_DIR)
     add_library(sqlite3 INTERFACE)
-    target_include_directories(sqlite3 INTERFACE ${CMAKE_PREFIX_PATH}/include)
+    target_include_directories(sqlite3 INTERFACE ${SQLITE_HEADER_DIR})
+else()
+    add_subdirectory(ext/sqlite)
 endif()
 
 add_library(genORM-cxx lib-cxx/src/genORM.cc)
