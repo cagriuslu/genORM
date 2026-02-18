@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 option(BUILD_TESTS "Build tests" OFF)
+option(BUILD_DEPENDENCIES "Build dependencies" OFF)
 
 project(genORM-cxx C CXX)
 
@@ -12,11 +13,22 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 endif()
 
-add_subdirectory(ext/sqlite)
+if(BUILD_DEPENDENCIES)
+    add_subdirectory(ext/sqlite)
+else()
+    add_library(sqlite3 INTERFACE)
+    target_include_directories(sqlite3 INTERFACE ${CMAKE_PREFIX_PATH}/include)
+endif()
 
-add_library(libgenORM-cxx lib-cxx/src/genORM.cc)
-target_include_directories(libgenORM-cxx PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/lib-cxx/include)
-target_link_libraries(libgenORM-cxx PRIVATE sqlite3)
+add_library(genORM-cxx lib-cxx/src/genORM.cc)
+target_include_directories(genORM-cxx PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib-cxx/include>
+    $<INSTALL_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/lib-cxx/include>
+)
+target_link_libraries(genORM-cxx PRIVATE sqlite3)
+
+install(TARGETS genORM-cxx ARCHIVE DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/install/lib)
+install(FILES lib-cxx/include/genORM/genORM.h DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/install/include/genORM)
 
 if(BUILD_TESTS)
     add_subdirectory(ext/googletest)
