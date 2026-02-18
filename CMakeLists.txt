@@ -27,8 +27,8 @@ target_include_directories(genORM-cxx PUBLIC
 )
 target_link_libraries(genORM-cxx PRIVATE sqlite3)
 
-install(TARGETS genORM-cxx ARCHIVE DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/install/lib)
-install(FILES lib-cxx/include/genORM/genORM.h DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/install/include/genORM)
+install(TARGETS genORM-cxx ARCHIVE DESTINATION lib)
+install(FILES lib-cxx/include/genORM/genORM.h DESTINATION include/genORM)
 
 if(BUILD_TESTS)
     add_subdirectory(ext/googletest)
