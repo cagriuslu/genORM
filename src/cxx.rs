@@ -40,7 +40,7 @@ fn generate_header(output_dir: &str, file_prefix: &str, namespace: &str, object_
             .join(", ");
         let constructor_declaration = format!("        explicit {class_name}(genORM::database& __db, uint64_t __id, {member_constructor_parameters});\n\n");
 
-        let create_declaration = format!("    public:\n        static std::expected<{class_name}, std::string> create(genORM::database& __db, uint64_t __id, {member_constructor_parameters});\n\n");
+        let create_declaration = format!("    public:\n        static std::expected<{class_name}, std::string> create(genORM::database& __db, {member_constructor_parameters});\n\n");
 
         let getter_declarations = validated_members.iter()
             .map(|m| m.format_getter_declaration())
@@ -107,7 +107,7 @@ fn generate_source(output_dir: &str, file_prefix: &str, namespace: &str, object_
             static constexpr std::string_view create_table_statement = \"CREATE TABLE IF NOT EXISTS {class_name} (__id INTEGER PRIMARY KEY NOT NULL, {create_table_statement}) STRICT;\";\n    \
             if (auto create_table_result = create_table_if_not_exists(__db, create_table_statement); not create_table_result) {{ return std::unexpected{{std::move(create_table_result.error())}}; }}\n    \
             static constexpr std::string_view insert_statement = \"INSERT INTO {class_name} VALUES (NULL, {insert_statement});\";\n    \
-            const auto binder = [&](int value_index) {{\n\
+            const auto binder = [&](int value_index) -> value_variant {{\n\
             {binder_implementation}    }};\n    \
             if (auto create_table_result = insert_into_table(__db, insert_statement, {member_count}, binder)) {{\n        \
             return {class_name}{{__db, *create_table_result, {constructor_call}}};\n    \

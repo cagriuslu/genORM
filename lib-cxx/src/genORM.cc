@@ -61,6 +61,11 @@ std::expected<uint64_t, std::string> object::insert_into_table(database& db, con
 					bind_result = std::unexpected(std::string{sqlite3_errstr(result)});
 				}
 			},
+			[&](const int64_t l) {
+			    if (const auto result = sqlite3_bind_int64(sqlite_statement, value_index, l); result != SQLITE_OK) {
+			        bind_result = std::unexpected(std::string{sqlite3_errstr(result)});
+			    }
+			},
 			[&](const std::vector<uint8_t>& bytes) {
 				if (const auto result = sqlite3_bind_blob64(sqlite_statement, value_index, bytes.data(), bytes.size(), SQLITE_TRANSIENT); result != SQLITE_OK) {
 					bind_result = std::unexpected(std::string{sqlite3_errstr(result)});
