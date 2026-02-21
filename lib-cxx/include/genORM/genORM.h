@@ -16,6 +16,8 @@ namespace genORM {
 
 		static std::expected<void, std::string> create_table_if_not_exists(database&, std::string_view statement);
 
+		static std::expected<void, std::string> create_index_if_not_exists(database&, std::string_view statement);
+
 		using value_variant = std::variant<std::monostate, int32_t, int64_t, std::vector<uint8_t>>;
 		using value_binder = std::function<value_variant(int value_index)>;
 		static std::expected<uint64_t, std::string> insert_into_table(database&, std::string_view statement, int value_count, const value_binder& binder);

@@ -1,4 +1,5 @@
-#include "testproj.orm.h"
+#include <genORM/genORM.h>
+#include "TestProj.orm.h"
 #include <gtest/gtest.h>
 #include <filesystem>
 
@@ -12,7 +13,7 @@ TEST(Dummy, dummy) {
 	{
 		auto db = genORM::database::open_or_create("test.db");
 		EXPECT_TRUE(db);
-		auto obj = testproj::User::create(*db, 15, std::nullopt, {1, 2, 3});
+		auto obj = testproj::MyObject::create(*db, 15, std::nullopt, {1, 2, 3});
 	}
 
 	{

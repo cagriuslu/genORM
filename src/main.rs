@@ -32,6 +32,8 @@ struct Member {
 
     #[serde(rename = "allow-null")]
     allow_null: Option<bool>,
+    
+    index: Option<bool>
 }
 
 #[derive(Deserialize, Debug)]

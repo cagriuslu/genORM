@@ -89,6 +89,19 @@ fn generate_source(output_dir: &str, file_prefix: &str, namespace: &str, object_
             .map(|m| m.format_database_schema())
             .collect::<Vec<String>>()
             .join(", ");
+
+        let create_index_blocks = object_type.members.iter()
+            .filter(|m| m.is_index())
+            .map(|m| {
+                let member_name = &m.name;
+                format!("    {{\n        \
+                    static constexpr std::string_view create_index_statement = \"CREATE INDEX IF NOT EXISTS Index_{class_name}_{member_name} ON {class_name}({member_name});\";\n        \
+                    if (auto create_index_result = create_index_if_not_exists(__db, create_index_statement); not create_index_result) {{ return std::unexpected{{std::move(create_index_result.error())}}; }}\n    \
+                    }}\n")
+            })
+            .collect::<Vec<String>>()
+            .join("");
+
         let insert_statement = vec![String::from("?"); object_type.members.len()].join(", ");
 
         let binder_implementation = (1..=object_type.members.len())
@@ -105,7 +118,8 @@ fn generate_source(output_dir: &str, file_prefix: &str, namespace: &str, object_
 
         let create_implementation = format!("std::expected<{namespace}::{class_name}, std::string> {namespace}::{class_name}::create(genORM::database& __db, {constructor_parameters}) {{\n    \
             static constexpr std::string_view create_table_statement = \"CREATE TABLE IF NOT EXISTS {class_name} (__id INTEGER PRIMARY KEY NOT NULL, {create_table_statement}) STRICT;\";\n    \
-            if (auto create_table_result = create_table_if_not_exists(__db, create_table_statement); not create_table_result) {{ return std::unexpected{{std::move(create_table_result.error())}}; }}\n    \
+            if (auto create_table_result = create_table_if_not_exists(__db, create_table_statement); not create_table_result) {{ return std::unexpected{{std::move(create_table_result.error())}}; }}\n\
+            {create_index_blocks}    \
             static constexpr std::string_view insert_statement = \"INSERT INTO {class_name} VALUES (NULL, {insert_statement});\";\n    \
             const auto binder = [&](int value_index) -> value_variant {{\n\
             {binder_implementation}    }};\n    \
@@ -133,6 +147,7 @@ pub fn generate(output_dir: String, cxx_options: &CxxOptions, object_types: &Vec
 
 trait MemberExt {
     fn is_allow_null(&self) -> bool;
+    fn is_index(&self) -> bool;
     fn validate(&self) -> Result<&dyn MemberExt, String>;
     fn format_declaration(&self) -> String;
     fn format_constructor_parameter(&self) -> String;
@@ -146,6 +161,8 @@ trait MemberExt {
 impl MemberExt for Member {
     fn is_allow_null(&self) -> bool { self.allow_null.unwrap_or(false) }
 
+    fn is_index(&self) -> bool { self.index.unwrap_or(false) }
+
     fn validate(&self) -> Result<&dyn MemberExt, String> {
         if self.name.is_empty() {
             return Err("Member name is empty".to_string())
@@ -156,6 +173,9 @@ impl MemberExt for Member {
             "BYTEARRAY" => {
                 if self.is_allow_null() {
                     return Err("Bytearray cannot be null".to_string())
+                }
+                if self.is_index() {
+                    return Err("Bytearray cannot be an index".to_string())
                 }
                 Ok(self)
             },

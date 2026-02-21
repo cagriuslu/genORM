@@ -14,13 +14,15 @@
         {
           "name": "i",
           "description": "This is some integer",
-          "type": "INT32"
+          "type": "INT32",
+          "index": true
         },
         {
           "name": "io",
           "description": "This is some optional integer",
           "type": "INT32",
-          "allow-null": true
+          "allow-null": true,
+          "index": true
         },
         {
           "name": "ba",
@@ -40,7 +42,8 @@
         {
           "name": "lo",
           "type": "INT64",
-          "allow-null" : true
+          "allow-null" : true,
+          "index": true
         }
       ]
     }

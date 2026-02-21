@@ -43,6 +43,10 @@ std::expected<void,std::string> object::create_table_if_not_exists(database& db,
 	return prepare_bind_execute_statement(static_cast<sqlite3*>(db._db_handle), statement);
 }
 
+std::expected<void, std::string> object::create_index_if_not_exists(database& db, std::string_view statement) {
+	return prepare_bind_execute_statement(static_cast<sqlite3*>(db._db_handle), statement);
+}
+
 std::expected<uint64_t, std::string> object::insert_into_table(database& db, const std::string_view statement, const int value_count, const value_binder& binder) {
 	std::expected<void, std::string> bind_result;
 	auto execute_result = prepare_bind_execute_statement(static_cast<sqlite3*>(db._db_handle), statement, value_count, [&](void* opaque_sqlite_statement, const int value_index) {
