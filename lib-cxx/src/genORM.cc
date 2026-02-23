@@ -95,7 +95,7 @@ std::expected<uint64_t, std::string> object::insert_into_table(database& db, con
 	}
 	return last_insert_rowid(static_cast<sqlite3*>(db._db_handle));
 }
-std::expected<std::vector<value_variant>, std::string> object::select_one(database& db, const std::string_view statement, const int value_count, const value_binder& binder, const std::vector<value_variant>& column_value_variants) {
+std::expected<std::optional<std::vector<value_variant>>, std::string> object::select_one(database& db, const std::string_view statement, const int value_count, const value_binder& binder, const std::vector<value_variant>& column_value_variants) {
 	auto mapper = value_mapper{.binder = binder};
 	std::expected<std::vector<value_variant>, std::string> return_value{};
 	auto execute_result = prepare_bind_execute_statement(static_cast<sqlite3*>(db._db_handle), statement, value_count, mapper, [&](void* opaque_sqlite_statement) -> bool {
@@ -133,7 +133,49 @@ std::expected<std::vector<value_variant>, std::string> object::select_one(databa
 		return std::unexpected{std::move(execute_result.error())};
 	}
 	if (return_value->empty()) {
-		return std::unexpected{"Select yielded no rows"};
+		return std::nullopt;
+	}
+	return return_value;
+}
+std::expected<std::vector<std::vector<value_variant>>, std::string> object::select_all(database& db, std::string_view statement, int value_count, const value_binder& binder, const std::vector<value_variant>& column_value_variants) {
+	auto mapper = value_mapper{.binder = binder};
+	std::expected<std::vector<std::vector<value_variant>>, std::string> return_value{};
+	auto execute_result = prepare_bind_execute_statement(static_cast<sqlite3*>(db._db_handle), statement, value_count, mapper, [&](void* opaque_sqlite_statement) -> bool {
+		auto* sqlite_statement = static_cast<sqlite3_stmt*>(opaque_sqlite_statement);
+		if (static_cast<size_t>(sqlite3_column_count(sqlite_statement)) != column_value_variants.size()) {
+			return_value = std::unexpected{"Select result contains different number of columns than expected"};
+			return false;
+		} else {
+			std::vector<value_variant> row;
+			for (int i = 0; i < sqlite3_column_count(sqlite_statement); ++i) {
+				if (sqlite3_column_type(sqlite_statement, i) == SQLITE_NULL) {
+					row.emplace_back(std::monostate{});
+				} else {
+					std::visit(overloaded{
+						[](std::monostate) { throw std::runtime_error("Column value variant cannot be monostate"); },
+						[&](const int32_t) {
+							row.emplace_back(sqlite3_column_int(sqlite_statement, i));
+						},
+						[&](const int64_t) {
+							row.emplace_back(sqlite3_column_int64(sqlite_statement, i));
+						},
+						[&](const std::vector<uint8_t>&) {
+							auto* begin = static_cast<const uint8_t*>(sqlite3_column_blob(sqlite_statement, i));
+							auto* end = begin + sqlite3_column_bytes(sqlite_statement, i);
+							row.emplace_back(std::vector<uint8_t>{begin, end});
+						},
+					}, column_value_variants[i]);
+				}
+			}
+			return_value.value().emplace_back(std::move(row));
+			return true;
+		}
+	});
+	if (not mapper.bind_result) {
+		return std::unexpected{std::move(mapper.bind_result.error())};
+	}
+	if (not execute_result) {
+		return std::unexpected{std::move(execute_result.error())};
 	}
 	return return_value;
 }

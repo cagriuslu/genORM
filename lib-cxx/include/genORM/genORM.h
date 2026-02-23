@@ -23,7 +23,10 @@ namespace genORM {
 		static std::expected<void, std::string> create_table_if_not_exists(database&, std::string_view statement);
 		static std::expected<void, std::string> create_index_if_not_exists(database&, std::string_view statement);
 		static std::expected<uint64_t, std::string> insert_into_table(database&, std::string_view statement, int value_count, const value_binder& binder);
-		static std::expected<std::vector<value_variant>, std::string> select_one(database&, std::string_view statement, int value_count, const value_binder& binder, const std::vector<value_variant>& column_value_variants);
+		/// Returns unexpected if an error occurs. Returns nullopt if the statement yielded no rows. Otherwise, returns
+		/// the first row as a vector of values.
+		static std::expected<std::optional<std::vector<value_variant>>, std::string> select_one(database&, std::string_view statement, int value_count, const value_binder& binder, const std::vector<value_variant>& column_value_variants);
+		static std::expected<std::vector<std::vector<value_variant>>, std::string> select_all(database&, std::string_view statement, int value_count, const value_binder& binder, const std::vector<value_variant>& column_value_variants);
 	};
 
 	class database final {
