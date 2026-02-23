@@ -155,7 +155,7 @@ fn generate_source(output_dir: &str, file_prefix: &str, namespace: &str, object_
             static constexpr std::string_view select_statement = \"SELECT * FROM {class_name} WHERE __id = ?;\";\n    \
             if (auto select_result = select_one(__db, select_statement, 1, [=](int) -> genORM::value_variant {{ return static_cast<int64_t>(__id); }},\n            \
             std::vector<genORM::value_variant>{{{{int64_t{{}}, {column_value_variants}}}}})) {{\n        \
-            return MyObject{{__db, __id,\n            \
+            return {class_name}{{__db, __id,\n            \
             {select_result_to_value}\n        }};\n    \
             }} else {{\n        \
             return std::unexpected{{std::move(select_result.error())}};\n    \

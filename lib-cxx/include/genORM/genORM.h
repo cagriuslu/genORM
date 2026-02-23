@@ -40,5 +40,18 @@ namespace genORM {
 		database(database&& other) noexcept;
 		database& operator=(database&& other) noexcept;
 		~database();
+
+		template <typename RetT>
+		std::expected<RetT, std::string> execute_transaction(const std::function<std::expected<RetT, std::string>(database&)>& op) {
+			if (auto result = begin_transaction(); not result) { return std::unexpected{std::move(result.error())}; }
+			auto retval = op(*this);
+			if (not retval) { return retval; }
+			if (auto result = end_transaction(); not result) { return std::unexpected{std::move(result.error())}; }
+			return retval;
+		}
+
+	private:
+		std::expected<void, std::string> begin_transaction();
+		std::expected<void, std::string> end_transaction();
 	};
 }

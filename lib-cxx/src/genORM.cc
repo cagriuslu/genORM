@@ -132,6 +132,9 @@ std::expected<std::vector<value_variant>, std::string> object::select_one(databa
 	if (not execute_result) {
 		return std::unexpected{std::move(execute_result.error())};
 	}
+	if (return_value->empty()) {
+		return std::unexpected{"Select yielded no rows"};
+	}
 	return return_value;
 }
 
@@ -171,4 +174,11 @@ database::~database() {
 		sqlite3_close(static_cast<sqlite3*>(_db_handle));
 		_db_handle = nullptr;
 	}
+}
+
+std::expected<void, std::string> database::begin_transaction() {
+	return prepare_bind_execute_statement(static_cast<sqlite3*>(_db_handle), "BEGIN TRANSACTION;");
+}
+std::expected<void, std::string> database::end_transaction() {
+	return prepare_bind_execute_statement(static_cast<sqlite3*>(_db_handle), "END TRANSACTION;");
 }
