@@ -42,14 +42,14 @@ fn generate_header(output_dir: &str, file_prefix: &str, namespace: &str, object_
 
         let create_declaration = format!("    public:\n        static std::expected<{class_name}, std::string> create(genORM::database& __db, {member_constructor_parameters});\n");
 
-        let find_by_rowid_declaration = format!("        static std::expected<{class_name}, std::string> find_by_rowid(genORM::database& __db, uint64_t);\n");
+        let find_by_rowid_declaration = format!("        static std::expected<std::optional<{class_name}>, std::string> find_by_rowid(genORM::database& __db, uint64_t);\n");
         let find_by_member_declarations = validated_members.iter()
             .filter(|m| m.is_index())
             .map(|m| {
                 let member_name = m.format_name();
                 let member_parameter = m.format_constructor_parameter();
-                format!("        static std::optional<{class_name}> find_first_by_{member_name}({member_parameter});\n        \
-                    static std::vector<{class_name}> find_all_by_{member_name}({member_parameter});\n")
+                format!("        static std::expected<std::optional<{class_name}>, std::string> find_first_by_{member_name}(genORM::database& __db, {member_parameter});\n        \
+                    static std::expected<std::vector<{class_name}>, std::string> find_all_by_{member_name}(genORM::database& __db, {member_parameter});\n")
             })
             .collect::<Vec<String>>()
             .join("");
@@ -59,13 +59,13 @@ fn generate_header(output_dir: &str, file_prefix: &str, namespace: &str, object_
             .collect::<Vec<String>>()
             .join("");
 
-        let setter_declarations = validated_members.iter()
-            .map(|m| m.format_setter_declaration())
-            .collect::<Vec<String>>()
-            .join("");
+        // let setter_declarations = validated_members.iter()
+        //     .map(|m| m.format_setter_declaration())
+        //     .collect::<Vec<String>>()
+        //     .join("");
 
         let close_class = format!("    }};\n");
-        type_declarations.push_str(&format!("{description}{open_class}{member_declarations}\n{constructor_declaration}{create_declaration}{find_by_rowid_declaration}{find_by_member_declarations}\n{getter_declarations}\n{setter_declarations}{close_class}\n"));
+        type_declarations.push_str(&format!("{description}{open_class}{member_declarations}\n{constructor_declaration}{create_declaration}{find_by_rowid_declaration}{find_by_member_declarations}\n{getter_declarations}{close_class}\n"));
     }
 
     let close_namespace = "}\n";
@@ -147,21 +147,79 @@ fn generate_source(output_dir: &str, file_prefix: &str, namespace: &str, object_
             .join(", ");
 
         let select_result_to_value = object_type.members.iter().enumerate()
-            .map(|(index, m)| m.format_select_result_to_value((index + 1) as i32))
+            .map(|(index, m)| m.format_select_result_to_value("(**select_result)", (index + 1) as i32))
             .collect::<Vec<_>>()
-            .join(",\n            ");
+            .join(",\n                ");
 
-        let find_by_rowid_implementation = format!("std::expected<{namespace}::{class_name}, std::string> {namespace}::{class_name}::find_by_rowid(genORM::database& __db, const uint64_t __id) {{\n    \
-            static constexpr std::string_view select_statement = \"SELECT * FROM {class_name} WHERE __id = ?;\";\n    \
+        let find_by_rowid_implementation = format!("std::expected<std::optional<{namespace}::{class_name}>, std::string> {namespace}::{class_name}::find_by_rowid(genORM::database& __db, const uint64_t __id) {{\n    \
+            static constexpr std::string_view select_statement = \"SELECT * FROM {class_name} WHERE __id = ? LIMIT 1;\";\n    \
             if (auto select_result = select_one(__db, select_statement, 1, [=](int) -> genORM::value_variant {{ return static_cast<int64_t>(__id); }},\n            \
             std::vector<genORM::value_variant>{{{{int64_t{{}}, {column_value_variants}}}}})) {{\n        \
-            return {class_name}{{__db, __id,\n            \
-            {select_result_to_value}\n        }};\n    \
+            if (*select_result) {{\n            \
+            return {class_name}{{__db, __id,\n                \
+            {select_result_to_value}\n            }};\n        \
+            }} else {{\n            \
+            return std::nullopt;\n        }}\n    \
             }} else {{\n        \
             return std::unexpected{{std::move(select_result.error())}};\n    \
             }}\n}}\n");
 
-        type_definitions.push_str(&format!("{constructor}{create_implementation}{find_by_rowid_implementation}\n"));
+        let find_first_by_implementation = object_type.members.iter()
+            .filter(|m| m.is_index())
+            .map(|m| {
+                let member_name = m.format_name();
+                let member_parameter = m.format_constructor_parameter();
+                let binder_implementation = m.format_binder_implementation();
+                format!("std::expected<std::optional<{namespace}::{class_name}>, std::string> {namespace}::{class_name}::find_first_by_{member_name}(genORM::database& __db, const {member_parameter}) {{\n    \
+                    static constexpr std::string_view select_statement = \"SELECT * FROM {class_name} WHERE {member_name} = ? LIMIT 1;\";\n    \
+                    if (auto select_result = select_one(__db, select_statement, 1, [=](int) -> genORM::value_variant {{ return {binder_implementation}; }},\n            \
+                    std::vector<genORM::value_variant>{{{{int64_t{{}}, {column_value_variants}}}}})) {{\n        \
+                    if (*select_result) {{\n            \
+                    return {class_name}{{__db, static_cast<uint64_t>(std::get<int64_t>((**select_result)[0])),\n                \
+                    {select_result_to_value}\n            }};\n        \
+                    }} else {{\n            \
+                    return std::nullopt;\n        \
+                    }}\n    \
+                    }} else {{\n        \
+                    return std::unexpected{{std::move(select_result.error())}};\n    \
+                    }}\n\
+                    }}")
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        let row_to_value = object_type.members.iter().enumerate()
+            .map(|(index, m)| m.format_select_result_to_value("row", (index + 1) as i32))
+            .collect::<Vec<_>>()
+            .join(",\n                    ");
+
+        let find_all_by_implementation = object_type.members.iter()
+            .filter(|m| m.is_index())
+            .map(|m| {
+                let member_name = m.format_name();
+                let member_parameter = m.format_constructor_parameter();
+                let binder_implementation = m.format_binder_implementation();
+                format!("std::expected<std::vector<{namespace}::{class_name}>, std::string> {namespace}::{class_name}::find_all_by_{member_name}(genORM::database& __db, const {member_parameter}) {{\n    \
+                    static constexpr std::string_view select_statement = \"SELECT * FROM {class_name} WHERE {member_name} = ?;\";\n    \
+                    if (auto select_result = select_all(__db, select_statement, 1, [=](int) -> genORM::value_variant {{ return {binder_implementation}; }},\n            \
+                    std::vector<genORM::value_variant>{{{{int64_t{{}}, {column_value_variants}}}}})) {{\n        \
+                    std::vector<{class_name}> found_objects;\n        \
+                    if (auto& rows = *select_result; not rows.empty()) {{\n            \
+                    for (auto& row : rows) {{\n                \
+                    found_objects.emplace_back({class_name}{{__db, static_cast<uint64_t>(std::get<int64_t>(row[0])),\n                    \
+                    {row_to_value}\n                }});\n            \
+                    }}\n        \
+                    }}\n        \
+                    return found_objects;\n    \
+                    }} else {{\n        \
+                    return std::unexpected{{std::move(select_result.error())}};\n    \
+                    }}\n\
+                    }}")
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        type_definitions.push_str(&format!("{constructor}{create_implementation}{find_by_rowid_implementation}{find_first_by_implementation}\n{find_all_by_implementation}\n"));
     }
 
     fs::write(String::from(output_dir) + file_prefix + ".orm.cc",
@@ -187,9 +245,9 @@ trait MemberExt {
     fn format_constructor_implementation(&self) -> String;
     fn format_constructor_call(&self) -> String;
     fn format_column_value_variant(&self) -> String;
-    fn format_select_result_to_value(&self, index: i32) -> String;
+    fn format_select_result_to_value(&self, container_name: &str, index: i32) -> String;
     fn format_getter_declaration(&self) -> String;
-    fn format_setter_declaration(&self) -> String;
+    // fn format_setter_declaration(&self) -> String;
     fn format_database_schema(&self) -> String;
     fn format_binder_implementation(&self) -> String;
 }
@@ -291,24 +349,24 @@ impl MemberExt for Member {
         }
     }
 
-    fn format_select_result_to_value(&self, index: i32) -> String {
+    fn format_select_result_to_value(&self, container_name: &str, index: i32) -> String {
         match self.type_.as_str() {
             "INT32" => {
                 if self.is_allow_null() {
-                    format!("std::holds_alternative<int32_t>((*select_result)[{index}]) ? std::get<int32_t>((*select_result)[{index}]) : std::optional<int32_t>{{}}")
+                    format!("std::holds_alternative<int32_t>({container_name}[{index}]) ? std::get<int32_t>({container_name}[{index}]) : std::optional<int32_t>{{}}")
                 } else {
-                    format!("std::get<int32_t>((*select_result)[{index}])")
+                    format!("std::get<int32_t>({container_name}[{index}])")
                 }
             },
             "INT64" => {
                 if self.is_allow_null() {
-                    format!("std::holds_alternative<int64_t>((*select_result)[{index}]) ? std::get<int64_t>((*select_result)[{index}]) : std::optional<int64_t>{{}}")
+                    format!("std::holds_alternative<int64_t>({container_name}[{index}]) ? std::get<int64_t>({container_name}[{index}]) : std::optional<int64_t>{{}}")
                 } else {
-                    format!("std::get<int64_t>((*select_result)[{index}])")
+                    format!("std::get<int64_t>({container_name}[{index}])")
                 }
             },
             "BYTEARRAY" => {
-                format!("std::holds_alternative<std::vector<uint8_t>>((*select_result)[{index}]) ? std::move(std::get<std::vector<uint8_t>>((*select_result)[{index}])) : std::vector<uint8_t>{{}}")
+                format!("std::holds_alternative<std::vector<uint8_t>>({container_name}[{index}]) ? std::move(std::get<std::vector<uint8_t>>({container_name}[{index}])) : std::vector<uint8_t>{{}}")
             },
             _ => String::new()
         }
@@ -332,23 +390,23 @@ impl MemberExt for Member {
         }
     }
 
-    fn format_setter_declaration(&self) -> String {
-        let name = &self.name;
-        match self.type_.as_str() {
-            "INT32" => {
-                let type_ = if self.is_allow_null() { "std::optional<int32_t>" } else { "int32_t" };
-                format!("        void set_{name}({type_});\n")
-            },
-            "INT64" => {
-                let type_ = if self.is_allow_null() { "std::optional<int64_t>" } else { "int64_t" };
-                format!("        void set_{name}({type_});\n")
-            },
-            "BYTEARRAY" => {
-                format!("        void set_{name}(std::vector<uint8_t>);\n")
-            },
-            _ => String::new()
-        }
-    }
+    // fn format_setter_declaration(&self) -> String {
+    //     let name = &self.name;
+    //     match self.type_.as_str() {
+    //         "INT32" => {
+    //             let type_ = if self.is_allow_null() { "std::optional<int32_t>" } else { "int32_t" };
+    //             format!("        void set_{name}({type_});\n")
+    //         },
+    //         "INT64" => {
+    //             let type_ = if self.is_allow_null() { "std::optional<int64_t>" } else { "int64_t" };
+    //             format!("        void set_{name}({type_});\n")
+    //         },
+    //         "BYTEARRAY" => {
+    //             format!("        void set_{name}(std::vector<uint8_t>);\n")
+    //         },
+    //         _ => String::new()
+    //     }
+    // }
 
     fn format_database_schema(&self) -> String {
         let name = &self.name;
