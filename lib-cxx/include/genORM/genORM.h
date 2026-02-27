@@ -1,8 +1,12 @@
 #pragma once
 #include <functional>
 #include <expected>
+#include <optional>
 #include <string>
 #include <variant>
+#include <exception>
+#include <stdexcept>
+#include <cstdint>
 
 namespace genORM {
 	class database;
